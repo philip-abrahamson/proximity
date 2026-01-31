@@ -1,0 +1,3 @@
+ID,Title,Description,URL,Bitmap,Lat,Lon
+"1","Some title","Some description","https://sometesturl.com",0,50.123456,0.123456
+"2","Second title","Second description","https://sometesturl.com/2",0,51.123456,-1.123456
