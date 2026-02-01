@@ -111,6 +111,8 @@ type GeoData struct {
 	records []Record
 	peanoIndex1 *llrb.LLRB
 	peanoIndex2 *llrb.LLRB
+	peanoMap1 map[Peano][]*Record
+	peanoMap2 map[Peano][]*Record
 }
 
 // Search results slice
@@ -185,7 +187,7 @@ func (geo *GeoData) Import(path string) error {
 	return nil
 }
 
-// Populate the Peano binary search indexes
+// PopulateIndexes: Populate the Peano binary search indexes & maps
 func (geo *GeoData) PopulateIndexes() {
 	geo.peanoIndex1 = llrb.New()
 	geo.peanoIndex2 = llrb.New()
@@ -194,32 +196,32 @@ func (geo *GeoData) PopulateIndexes() {
 		log.Printf("Generating binary search index for %d records...\n", len(geo.records))
 	}
 
+	geo.peanoMap1 = make(map[Peano][]*Record)
+	geo.peanoMap2 = make(map[Peano][]*Record)
+
 	for _, v := range geo.records {
-		pp1 := PeanoPointer{ peano: v.Peano1, record: &v }
-		pp2 := PeanoPointer{ peano: v.Peano2, record: &v }
-		// If we want to use the slice of matching peano records, we'll want ReplaceOrInsert
-		// geo.peanoIndex1.ReplaceOrInsert(pp1)
-		// geo.peanoIndex2.ReplaceOrInsert(pp2)
-		// If we want to include all records in the binary search index, even if they match peanos
-		geo.peanoIndex1.InsertNoReplace(pp1)
-		geo.peanoIndex2.InsertNoReplace(pp2)
+		peano1 := v.Peano1
+		peano2 := v.Peano2
+		pslice1, exists1 := geo.peanoMap1[peano1]
+		pslice2, exists2 := geo.peanoMap2[peano2]
+		if exists1 {
+			pslice1 = append(pslice1, &v)
+		} else {
+			geo.peanoMap1[peano1] = []*Record{&v,}
+			geo.peanoIndex1.ReplaceOrInsert(peano1)
+		}
+		if exists2 {
+			pslice2 = append(pslice2, &v)
+		} else {
+			geo.peanoMap2[peano2] = []*Record{&v,}
+			geo.peanoIndex2.ReplaceOrInsert(peano2)
+		}
 	}
 	return
 }
 
-func (a PeanoPointer) Less(b llrb.Item) bool {
-	// warning: this innocuous looking extra comparison panics during a Find with:
-	// "invalid memory address or nil pointer dereference"
-	// if a.peano == b.(PeanoPointer).peano {
-	// 	return cmp.Less(a.record.ID, b.(PeanoPointer).record.ID)
-	// }
-	return cmp.Less(a.peano, b.(PeanoPointer).peano)
-}
-
-func sortPeanos(peanos *[]PeanoPointer) {
-	slices.SortFunc(*peanos, func(a, b PeanoPointer) int {
-		return cmp.Compare(a.peano, b.peano)
-	})
+func (a Peano) Less(b llrb.Item) bool {
+	return a < b.(Peano)
 }
 
 func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err error) {
@@ -281,10 +283,14 @@ func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err
 // Search the geodata for matching records
 func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units string) []ResultRecord {
 
+	// final results to return
 	var res []ResultRecord
-	var pps []PeanoPointer
-	uniqueRec := make(map[*Record]bool)
+	// intermediate slice of records to sort & potentially limit before becoming results
+	var recs []Record
+	uniquePeano := make(map[Peano]bool)
 
+	// Don't go past the number of results desired when
+	// walking along either peano curve in either direction
 	var maxResUp1, maxResUp2, maxResDown1, maxResDown2 uint64
 	maxResUp1 = max
 	maxResUp2 = max
@@ -309,51 +315,61 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 
 	// find the locations of the first record matching
 	// these peanos in the peanoIndex
-	iterator := func(p llrb.Item, maxAttempts *uint64, maxRes *uint64) bool {
+	iterator := func(peano llrb.Item, maxAttempts *uint64, maxRes *uint64, pMap map[Peano][]*Record) bool {
 
-		// Cut out in case there are no matching results
-		*maxAttempts--
-		if *maxAttempts < 0 {
-			return false
-		}
-		if bitmask > 0 {
-			// Assume A AND B AND C ... for the bitmask
-			// we will add more boolean logic later...
-			if p.(PeanoPointer).record.Bitmap & bitmask != bitmask {
-				// the AND logic failed, so return early
-				// but continue iterating (true)
-				return true
-			}
-		}
-		if _, exists := uniqueRec[p.(PeanoPointer).record]; exists {
-			// don't store the value, but continue iterating (true)
+		if _, pExists := uniquePeano[peano.(Peano)]; pExists {
+			// skip this duplicate peano code, but continue iterating (true)
 			return true
 		}
-		*maxRes--
-		if *maxRes < 0 {
-			return false
+		candidates, sanity := pMap[peano.(Peano)]
+		if ! sanity {
+			panic(fmt.Errorf("Our unique peano map is out of sync with our peano record map for peano %v", peano))
 		}
-		uniqueRec[p.(PeanoPointer).record] = true
-		pps = append(pps, p.(PeanoPointer))
+		for i := 0; i < len(candidates); i++ {
+			rec := candidates[i]
+			// check each record matches the bitmask, if provided
+			if bitmask > 0 {
+				// Assume A AND B AND C ... for the bitmask
+				// we will add more boolean logic later...
+				if rec.Bitmap & bitmask != bitmask {
+					// the AND logic failed, so return early
+					// but continue iterating (true)
+					return true
+				}
+			}
+			// Cut out in case there are no matching results
+			*maxAttempts--
+			if *maxAttempts < 0 {
+				return false
+			}
+			// cut out if we've hit the maximum desired results
+			*maxRes--
+			if *maxRes < 0 {
+				return false
+			}
+			// add the record to our intermediate slice of records
+			recs = append(recs, *rec)
+			uniquePeano[peano.(Peano)] = true
+		}
 		return true
 	}
 
 	iteratorUp1 := func(p llrb.Item) bool {
-		return iterator(p, &maxAttemptsUp1, &maxResUp1)
+		return iterator(p, &maxAttemptsUp1, &maxResUp1, geo.peanoMap1)
 	}
 	iteratorDown1 := func(p llrb.Item) bool {
-		return iterator(p, &maxAttemptsDown1, &maxResDown1)
+		return iterator(p, &maxAttemptsDown1, &maxResDown1, geo.peanoMap1)
 	}
 	iteratorUp2 := func(p llrb.Item) bool {
-		return iterator(p, &maxAttemptsUp2, &maxResUp2)
+		return iterator(p, &maxAttemptsUp2, &maxResUp2, geo.peanoMap2)
 	}
 	iteratorDown2 := func(p llrb.Item) bool {
-		return iterator(p, &maxAttemptsDown2, &maxResDown2)
+		return iterator(p, &maxAttemptsDown2, &maxResDown2, geo.peanoMap2)
 	}
 
 	// traverse each index up and down and merge the results into pps
 	t0 := time.Now()
-	geo.peanoIndex1.AscendGreaterOrEqual(PeanoPointer{peano: peano1}, iteratorUp1)
+	geo.peanoIndex1.AscendGreaterOrEqual(peano1, iteratorUp1)
 	t0D := time.Since(t0)
 	if Debug {
 		log.Printf("Ascending peano index1 took %v", t0D)
@@ -361,16 +377,16 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	if (peano1 > 0) {
 		// subtract 1 to avoid duplicating that peano
 		t1 := time.Now()
-		geo.peanoIndex1.DescendLessOrEqual(PeanoPointer{peano: peano1 - 1}, iteratorDown1)
+		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, iteratorDown1)
 		t1D := time.Since(t1)
 		if Debug {
 			log.Printf("Descending peano index1 took %v", t1D)
 		}
 	}
-	geo.peanoIndex2.AscendGreaterOrEqual(PeanoPointer{peano: peano2}, iteratorUp2)
+	geo.peanoIndex2.AscendGreaterOrEqual(peano2, iteratorUp2)
 	if (peano2 > 0) {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex2.DescendLessOrEqual(PeanoPointer{peano: peano2 - 1}, iteratorDown2)
+		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, iteratorDown2)
 	}
 
 	// Sort by proximity before cutting down to the expected result count.
@@ -384,37 +400,37 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	// calculations.
 	// Perhaps if a larger number of results were being returned it might
 	// be worthwhile?
-	ppsProx := map[PeanoPointer]float64{}
-	for _, pp := range pps {
-		ppsProx[pp] = proximityForSort(lat - pp.record.Lat, lon - pp.record.Lon)
+	recProx := map[*Record]float64{}
+	for _, rec := range recs {
+		recProx[&rec] = proximityForSort(lat - rec.Lat, lon - rec.Lon)
 	}
-	slices.SortFunc(pps, func(a, b PeanoPointer) int {
-		ppA, _ := ppsProx[a]
-		ppB, _ := ppsProx[b]
-		return cmp.Compare(ppA, ppB)
+	slices.SortFunc(recs, func(a, b Record) int {
+		proxA, _ := recProx[&a]
+		proxB, _ := recProx[&b]
+		return cmp.Compare(proxA, proxB)
 	})
 
 	// Cut down the results by slicing by either the smaller of the desired
 	// max records or the count of the current results
 	var maxLen uint64
-	maxLen = uint64(len(pps))
+	maxLen = uint64(len(recs))
 	if max < maxLen {
 		maxLen = max
 	}
-	for _, pp := range pps[:maxLen] {
-		rec := ResultRecord{
-			ID: pp.record.ID,
-			Title: pp.record.Title,
-			Description: pp.record.Description,
-			URL: pp.record.URL,
-			Bitmap: pp.record.Bitmap,
-			Lat: pp.record.Lat,
-			Lon: pp.record.Lon,
-			Distance: proximity(ppsProx[pp], units),
+	for _, rec := range recs[:maxLen] {
+		rrec := ResultRecord{
+			ID: rec.ID,
+			Title: rec.Title,
+			Description: rec.Description,
+			URL: rec.URL,
+			Bitmap: rec.Bitmap,
+			Lat: rec.Lat,
+			Lon: rec.Lon,
+			Distance: proximity(recProx[&rec], units),
 			Units: units,
 		}
 
-		res = append(res, rec)
+		res = append(res, rrec)
 	}
 
 	return res
@@ -579,3 +595,5 @@ func proximity(proxForSort float64, units string) float64 {
 	}
 	return proxDegrees * KmPerDegree
 }
+
+// type bspTree
