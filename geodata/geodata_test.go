@@ -11,10 +11,14 @@ import (
 // then search at the origin of the spiral for the first 20 records in the spiral
 // 0.0001 is approx 10m at the inner arm of the spiral - which will feature many duplicated peanos
 func TestSpiral(t *testing.T) {
-	recCnt := 360000
+	// recCnt := 1000000
+	// recCnt := 360000
+	// recCnt := 100
+	// recCnt := 40
+	recCnt := 20
 	start := time.Now()
-	geo := PopulateData(0.0, 0.0, 0.001, recCnt)
-	// geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
+	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
+	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
 	t.Logf("proximity data population of %d records took %s", recCnt, time.Since(start))
 	var expect int
 	expect = 20
@@ -86,17 +90,11 @@ func Spiral(bearing rune, lat, lon, delta float64, i int) (rune, float64, float6
 		lat += arm
 		bearing = 'N'
 	}
-	if lat > 90 {
-		lat -= 180
+	if lat > 90 || lat < -90 {
+		lat = 0 // reset spiral
 	}
-	if lat < -90 {
-		lat += 180
-	}
-	if lon > 180 {
-		lon -= 360
-	}
-	if lon < -180 {
-		lon += 360
+	if lon > 180 || lon < -180 {
+		lon = 0 // reset spiral
 	}
 	return bearing, lat, lon
 }

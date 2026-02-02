@@ -5,8 +5,6 @@ import (
 	"cmp"
     "encoding/csv"
     "fmt"
-	// binary search tree
-	"github.com/petar/GoLLRB/llrb"
 	"io"
 	"log"
 	"math"
@@ -21,6 +19,19 @@ const Debug = true
 // Geospatial index consisting of the location along a fractal, space-filling curve.
 // Named after the discoverer, 19th century Italian mathematician Giuseppe Peano
 type Peano uint32
+
+// Number of bits of information to retain in the peano code
+// i.e. its level of digitisation.
+// We started with 16 bits, but that provides a resolution of
+// about 600m, (diameter of world ~40,000km / 2**16) which might not suit all applications.
+// 19 bits would be under 100m.
+// However, the larger the number of bits, the longer the PeanoIndex
+// e.g. 19 bits will lead to 524,288 array elements
+// per index, whereas 16bits is only 65,536 elements
+// IF CHANGING THIS - you must also manually change PeanoIndex (index.go) to use a size of 2**PeanoBits
+// and use uint32 instead of uint16 when casting ints...
+// SEE ALSO CalcPeano() which has this hardcoded currently...
+const PeanoBits = 16
 
 // Each Record includes:
 // Title, Description for free text data
@@ -64,34 +75,31 @@ type ResultRecord struct {
 	Units string `json:"units" binding:"required,string"`
 }
 
-type PeanoPointer struct {
-	peano Peano
-	record *Record
-}
-
 // Our geospatial data includes the following data structures:
 //
 // * "records"
-//   A slice containing each result record (type Record)
+//   A slice containing each data record (type Record)
 //
 // * "peanoIndex1", "peanoIndex2"
-//   Two searchable indexes of "Peano codes" pointing at result records
+//   Two searchable indexes of "Peano codes" pointing at
+//   the next peano codes in the series.
 //   (Peano codes are fractal space-filling curves discovered by
 //    19th century mathematician Giuseppe Peano. We use them to scale our
 //    proximity queries.  We use two separate peano codes offset from
 //    each other to minimise the spatial distortions inherent when using
 //    a one-dimensional curve to describe a two-dimensional space)
-//    Each of these indexes is a binary search tree described
-//    by its author Petar Maymounkov as "GoLLRB is a Left-Leaning Red-Black
-//    (LLRB) implementation of 2-3 balanced binary search trees..."
+//
+//  * "peanoMap1", "peanoMap2"
+//    maps of peano code to a slice containing pointers to data records
+//    for each record having that same peano code location.
 //
 // What we do when we search is:
 // 1. convert the input geospatial latitude & longitude coordinates
 //    into our two Peano codes
 // 2. look-up peanoIndex1 & peanoIndex2 to find the locations of
 //    that peano and a set number of codes before and after it.
-//    We will look up each record in turn and
-//    potentially check each records' bitmap field matches any
+//    We will then look up each record in turn in the peanoMaps
+//    and check each records' bitmap field matches any
 //    boolean logic applied in the query.
 //
 // Currently this has a weakness if the query is for a very rare
@@ -109,8 +117,8 @@ type PeanoPointer struct {
 // sort these by location to find the nearest.
 type GeoData struct {
 	records []Record
-	peanoIndex1 *llrb.LLRB
-	peanoIndex2 *llrb.LLRB
+	peanoIndex1 *PeanoIndex
+	peanoIndex2 *PeanoIndex
 	peanoMap1 map[Peano][]*Record
 	peanoMap2 map[Peano][]*Record
 }
@@ -189,8 +197,8 @@ func (geo *GeoData) Import(path string) error {
 
 // PopulateIndexes: Populate the Peano binary search indexes & maps
 func (geo *GeoData) PopulateIndexes() {
-	geo.peanoIndex1 = llrb.New()
-	geo.peanoIndex2 = llrb.New()
+	geo.peanoIndex1 = NewPeanoIndex()
+	geo.peanoIndex2 = NewPeanoIndex()
 
 	if Debug {
 		log.Printf("Generating binary search index for %d records...\n", len(geo.records))
@@ -217,11 +225,11 @@ func (geo *GeoData) PopulateIndexes() {
 			geo.peanoIndex2.ReplaceOrInsert(peano2)
 		}
 	}
-	return
-}
 
-func (a Peano) Less(b llrb.Item) bool {
-	return a < b.(Peano)
+	geo.peanoIndex1.Process()
+	geo.peanoIndex2.Process()
+
+	return
 }
 
 func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err error) {
@@ -291,19 +299,27 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 
 	// Don't go past the number of results desired when
 	// walking along either peano curve in either direction
-	var maxResUp1, maxResUp2, maxResDown1, maxResDown2 uint64
-	maxResUp1 = max
-	maxResUp2 = max
-	maxResDown1 = max
-	maxResDown2 = max
+	var maxResUp1, maxResUp2, maxResDown1, maxResDown2 int
+	intMax := int(max)
+	maxResUp1 = intMax
+	maxResUp2 = intMax
+	maxResDown1 = intMax
+	maxResDown2 = intMax
 
 	// Don't keep trying to obtain results indefinitely
-	var maxAt, maxAttemptsUp1, maxAttemptsUp2, maxAttemptsDown1, maxAttemptsDown2 uint64
-	maxAt = max * 2
+	var maxAt, maxAttemptsUp1, maxAttemptsUp2, maxAttemptsDown1, maxAttemptsDown2 int
+	maxAt = int(max * 2)
 	maxAttemptsUp1 = maxAt
 	maxAttemptsUp2 = maxAt
 	maxAttemptsDown1 = maxAt
 	maxAttemptsDown2 = maxAt
+
+	// track the first binary search
+	// which helps us optimise subsequent movements along the peano curve
+	firstSearchUp1 := true
+	firstSearchDown1 := true
+	firstSearchUp2 := true
+	firstSearchDown2 := true
 
 	if units != "mi" {
 		units = "km"
@@ -315,15 +331,21 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 
 	// find the locations of the first record matching
 	// these peanos in the peanoIndex
-	iterator := func(peano llrb.Item, maxAttempts *uint64, maxRes *uint64, pMap map[Peano][]*Record) bool {
+	iterator := func(peano Peano, maxAttempts *int, maxRes *int, pMap map[Peano][]*Record) bool {
 
-		if _, pExists := uniquePeano[peano.(Peano)]; pExists {
+		// Cut out in case there are no matching results
+		*maxAttempts--
+		if *maxAttempts < 0 {
+			return false
+		}
+		if _, pExists := uniquePeano[peano]; pExists {
 			// skip this duplicate peano code, but continue iterating (true)
 			return true
 		}
-		candidates, sanity := pMap[peano.(Peano)]
-		if ! sanity {
-			panic(fmt.Errorf("Our unique peano map is out of sync with our peano record map for peano %v", peano))
+		candidates, exists := pMap[peano]
+		if ! exists {
+			// e.g. a peano generated by subtracting one from an existing one
+			return true
 		}
 		for i := 0; i < len(candidates); i++ {
 			rec := candidates[i]
@@ -337,11 +359,6 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 					return true
 				}
 			}
-			// Cut out in case there are no matching results
-			*maxAttempts--
-			if *maxAttempts < 0 {
-				return false
-			}
 			// cut out if we've hit the maximum desired results
 			*maxRes--
 			if *maxRes < 0 {
@@ -349,27 +366,27 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			}
 			// add the record to our intermediate slice of records
 			recs = append(recs, *rec)
-			uniquePeano[peano.(Peano)] = true
+			uniquePeano[peano] = true
 		}
 		return true
 	}
 
-	iteratorUp1 := func(p llrb.Item) bool {
+	iteratorUp1 := func(p Peano, first bool) bool {
 		return iterator(p, &maxAttemptsUp1, &maxResUp1, geo.peanoMap1)
 	}
-	iteratorDown1 := func(p llrb.Item) bool {
+	iteratorDown1 := func(p Peano, first bool) bool {
 		return iterator(p, &maxAttemptsDown1, &maxResDown1, geo.peanoMap1)
 	}
-	iteratorUp2 := func(p llrb.Item) bool {
+	iteratorUp2 := func(p Peano, first bool) bool {
 		return iterator(p, &maxAttemptsUp2, &maxResUp2, geo.peanoMap2)
 	}
-	iteratorDown2 := func(p llrb.Item) bool {
+	iteratorDown2 := func(p Peano, first bool) bool {
 		return iterator(p, &maxAttemptsDown2, &maxResDown2, geo.peanoMap2)
 	}
 
-	// traverse each index up and down and merge the results into pps
+	// traverse each index up and down and merge the results into recs
 	t0 := time.Now()
-	geo.peanoIndex1.AscendGreaterOrEqual(peano1, iteratorUp1)
+	geo.peanoIndex1.AscendGreaterOrEqual(peano1, firstSearchUp1, iteratorUp1)
 	t0D := time.Since(t0)
 	if Debug {
 		log.Printf("Ascending peano index1 took %v", t0D)
@@ -377,16 +394,16 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	if (peano1 > 0) {
 		// subtract 1 to avoid duplicating that peano
 		t1 := time.Now()
-		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, iteratorDown1)
+		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, firstSearchDown1, iteratorDown1)
 		t1D := time.Since(t1)
 		if Debug {
 			log.Printf("Descending peano index1 took %v", t1D)
 		}
 	}
-	geo.peanoIndex2.AscendGreaterOrEqual(peano2, iteratorUp2)
+	geo.peanoIndex2.AscendGreaterOrEqual(peano2, firstSearchUp2, iteratorUp2)
 	if (peano2 > 0) {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, iteratorDown2)
+		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, firstSearchDown2, iteratorDown2)
 	}
 
 	// Sort by proximity before cutting down to the expected result count.
@@ -466,6 +483,7 @@ func storeHeaders(hp *HeaderPosition, line []string) {
 // the earth is closer to an ellipsoid).
 func CalcPeano(lat, lon float64) Peano {
 
+	// TODO - use PeanoBits to generalise this instead of assuming 16bits
 	lat16, lon16 := digitiseDegrees(lat, lon)
 
 	var maskIn uint16
@@ -481,6 +499,7 @@ func CalcPeano(lat, lon float64) Peano {
 	maskIn = 1
 	maskOut = 2
 
+	// TODO - use PeanoBits to generalise this instead of assuming 16bits
 	for i := 0; i < 16; i++ {
 
 		if (lat16 & maskIn) != 0 {
@@ -493,6 +512,7 @@ func CalcPeano(lat, lon float64) Peano {
 
 	maskIn = 1
 	maskOut = 1
+	// TODO - use PeanoBits to generalise this instead of assuming 16bits
 	for i := 0; i < 16; i++ {
 
 		if (lon16 & maskIn) != 0 {
