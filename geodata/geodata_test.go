@@ -4,6 +4,7 @@ import (
 	"testing"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,9 +14,10 @@ import (
 func TestSpiral(t *testing.T) {
 	// recCnt := 1000000
 	// recCnt := 360000
-	// recCnt := 100
-	// recCnt := 40
-	recCnt := 20
+	recCnt := 200
+	//recCnt := 100
+	//recCnt := 40
+	//recCnt := 20
 	start := time.Now()
 	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
 	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
@@ -25,6 +27,16 @@ func TestSpiral(t *testing.T) {
 	fstart := time.Now()
 	res := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km")
 	t.Logf("proximity data search of %d records for %d results took %s", recCnt, expect, time.Since(fstart))
+	uniqueIds := make(map[string]bool)
+	ids := []string{}
+	for _, r := range res {
+		uniqueIds[r.ID] = true
+		ids = append(ids, r.ID)
+	}
+	t.Logf("IDs returned: %s\n", strings.Join(ids, ", "))
+	if len(res) != len(uniqueIds) {
+		t.Errorf("Got some non-unique ids in the results!")
+	}
 	if len(res) != expect {
 		t.Errorf("Got %d results instead of %d results", len(res), expect)
 	}

@@ -88,18 +88,25 @@ func (pi *PeanoIndex) Process() {
 				minmax[1] = i
 			}
 		} else {
-			minmax[0] = i
-			minmax[1] = i
+			pi.Ranges[high16] = [2]int{i, i}
 		}
 	}
 
 	return
 }
 
+// AscendLessOrEqual will search for the input peano 'p', and whether it finds
+// it or not will then ascend up the peano curve and find the next peano
+// codes and feed them one by one into the 'iterator' function passed in.
+// The iterator function must return false at some point when enough
+// results have been collected.
+// 'first' is just a boolean flag to indicate whether this is the first
+// or subsequent call, which helps us optimise the finding of peano codes.
 func (pi *PeanoIndex) AscendGreaterOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) {
 	pi.ascendGreaterOrEqual(p, first, iterator)
 }
 
+// recursive function which exits when the iterator function returns false
 func (pi *PeanoIndex) ascendGreaterOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) bool {
 	var nextPeano Peano
 	if first {
@@ -119,17 +126,26 @@ func (pi *PeanoIndex) ascendGreaterOrEqual(p Peano, first bool, iterator func(p 
 		links, _ := pi.Links[p]
 		nextPeano = pi.Peanos[links[1]]
 	}
+	// base of our recursion
 	if !iterator(nextPeano, first) {
 		return false
 	}
-	// recurse into this function
+	// recurse into this same function
 	return pi.ascendGreaterOrEqual(nextPeano, first, iterator)
 }
 
+// DescendLessOrEqual will search for the input peano 'p', and whether it finds
+// it or not will then descend down the peano curve and find the next peano
+// codes and feed them one by one into the 'iterator' function passed in.
+// The iterator function must return false at some point when enough
+// results have been collected.
+// 'first' is just a boolean flag to indicate whether this is the first
+// or subsequent call, which helps us optimise the finding of peano codes.
 func (pi *PeanoIndex) DescendLessOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) {
 	pi.descendLessOrEqual(p, first, iterator)
 }
 
+// descendLessOrEqual is a recursive function which exits when the iterator function returns false
 func (pi *PeanoIndex) descendLessOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) bool {
 	var prevPeano Peano
 	if first {
@@ -149,10 +165,11 @@ func (pi *PeanoIndex) descendLessOrEqual(p Peano, first bool, iterator func(p Pe
 		links, _ := pi.Links[p]
 		prevPeano = pi.Peanos[links[0]]
 	}
+	// base of our recursion
 	if !iterator(prevPeano, first) {
 		return false
 	}
-	// recurse into this function
+	// recurse into this same function
 	return pi.descendLessOrEqual(prevPeano, first, iterator)
 }
 
