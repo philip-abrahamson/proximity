@@ -68,9 +68,9 @@ func (pi *PeanoIndex) Process() {
 		return
 	}
 
-	// populate the first and last links which wrap around
-	// TODO - this might be a mistake, introducing subtle issues
-	// test this doesn't infinitely loop the binarySearch for instance!
+	// Populate the first and last links, which wrap around the globe.
+	// (Hopefully not a subtle mistake which e.g. infinitely loops
+	// the binarySearch...)
 	pi.Links[ pi.Peanos[0] ] = [2]int{imax, 1}
 	pi.Links[ pi.Peanos[imax] ] = [2]int{imax - 1, 0}
 
@@ -81,12 +81,7 @@ func (pi *PeanoIndex) Process() {
 		high16 := highBits(peano)
 		minmax, exists := pi.Ranges[high16]
 		if exists {
-			if int(peano) < minmax[0] {
-				minmax[0] = i
-			}
-			if int(peano) > minmax[1] {
-				minmax[1] = i
-			}
+			pi.Ranges[high16] = [2]int{minmax[0], i}
 		} else {
 			pi.Ranges[high16] = [2]int{i, i}
 		}

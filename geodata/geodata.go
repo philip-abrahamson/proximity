@@ -11,7 +11,6 @@ import (
     "os"
 	"slices"
 	"strconv"
-	"time"
 )
 
 const Debug = true
@@ -367,9 +366,6 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			// add the record to our intermediate slice of records
 			recs = append(recs, *rec)
 			uniqueRecords[rec] = true
-			if Debug {
-				log.Printf("added record to intermediate slice - %v", *rec)
-			}
 		}
 		return true
 	}
@@ -388,20 +384,10 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	}
 
 	// traverse each index up and down and merge the results into recs
-	t0 := time.Now()
 	geo.peanoIndex1.AscendGreaterOrEqual(peano1, firstSearchUp1, iteratorUp1)
-	t0D := time.Since(t0)
-	if Debug {
-		log.Printf("Ascending peano index1 took %v", t0D)
-	}
 	if (peano1 > 0) {
 		// subtract 1 to avoid duplicating that peano
-		t1 := time.Now()
 		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, firstSearchDown1, iteratorDown1)
-		t1D := time.Since(t1)
-		if Debug {
-			log.Printf("Descending peano index1 took %v", t1D)
-		}
 	}
 	geo.peanoIndex2.AscendGreaterOrEqual(peano2, firstSearchUp2, iteratorUp2)
 	if (peano2 > 0) {
@@ -422,7 +408,8 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	// be worthwhile?
 	recProx := map[*Record]float64{}
 	for _, rec := range recs {
-		recProx[&rec] = proximityForSort(lat - rec.Lat, lon - rec.Lon)
+		deltaLat := lat - rec.Lat
+		recProx[&rec] = proximityForSort(deltaLat/2, deltaLat, lon - rec.Lon)
 	}
 	slices.SortFunc(recs, func(a, b Record) int {
 		proxA, _ := recProx[&a]
@@ -604,8 +591,8 @@ func generateCosineTable() {
 // Estimate of the square of the proximity for sorting purposes.
 // This should only be used on a subset of results.
 // D stands for delta between the search latitude & a result latitude
-func proximityForSort(latD float64, lonD float64) float64 {
-	cosLonEstimate := cosineEstimate(int(lonD))
+func proximityForSort(meanLat float64, latD float64, lonD float64) float64 {
+	cosLonEstimate := cosineEstimate(int(meanLat))
 	// Note: a less accurate, but faster method is:
 	// 3/8 * (latD + (lonD * cosLonEstimate))
 	return (latD * latD) + (lonD * cosLonEstimate * lonD * cosLonEstimate)

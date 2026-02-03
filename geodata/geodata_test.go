@@ -12,12 +12,12 @@ import (
 // then search at the origin of the spiral for the first 20 records in the spiral
 // 0.0001 is approx 10m at the inner arm of the spiral - which will feature many duplicated peanos
 func TestSpiral(t *testing.T) {
-	// recCnt := 1000000
+	recCnt := 1000000
 	// recCnt := 360000
-	recCnt := 200
-	//recCnt := 100
-	//recCnt := 40
-	//recCnt := 20
+	// recCnt := 200
+	// recCnt := 100
+	// recCnt := 40
+	// recCnt := 20
 	start := time.Now()
 	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
 	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
@@ -53,6 +53,26 @@ func TestSpiral(t *testing.T) {
 	// We don't test for 100% here, because the results could potentially be erratic.
 	// Our system is designed for speed over accuracy.
 	t.Logf("Got %.0f%% of the results we expected\n", float64(100) * float64(cnt)/float64(expect))
+
+	// try another search at another location
+	res2 := geo.Find(float64(50), float64(1.12345), uint64(0), uint64(expect), "km")
+	ids = []string{}
+	for _, r := range res2 {
+		ids = append(ids, r.ID)
+	}
+	t.Logf("Second search at a different location, IDs returned: %s\n", strings.Join(ids, ", "))
+
+	// benchmark the search a little by traversing the globe
+	benchCnt := 0
+	t0 := time.Now()
+	for lat := -90; lat <= 90; lat++ {
+		for lon := -180; lon <= 180; lon++ {
+			_ = geo.Find(float64(lat), float64(lon), uint64(0), uint64(expect), "km")
+			benchCnt++
+		}
+	}
+	tD := time.Since(t0)
+	t.Logf("Performed %d searches for %d records each time, which took a total time %v at an average time per search of %0.fµs", benchCnt, expect, tD, float64(int64(tD)/int64(benchCnt))/1000)
 }
 
 // TestPeano is just a "sight" test
