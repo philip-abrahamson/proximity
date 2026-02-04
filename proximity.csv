@@ -1,3 +1,5 @@
 ID,Title,Description,URL,Bitmap,Lat,Lon
-"1","Some title","Some description","https://sometesturl.com",0,50.123456,0.123456
-"2","Second title","Second description","https://sometesturl.com/2",0,51.123456,-1.123456
+"1","Some title","Some description","https://sometesturl.com",1,50.123456,0.123456
+"2","Second title","Second description","https://sometesturl.com/2",2,51.123456,-1.123456
+"3","Third title","Third description","https://sometesturl.com/3",3,52.123456,-1.123456
+"4","Fourth title","Fourth description","https://sometesturl.com/4",0,50.123456,1.123456

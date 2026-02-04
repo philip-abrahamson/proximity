@@ -17,15 +17,15 @@ import (
 // then search at the origin of the spiral for the first 20 records in the spiral
 // 0.0001 is approx 10m at the inner arm of the spiral - which will feature many duplicated peanos
 func TestSpiral(t *testing.T) {
-	recCnt := 1000000
+	// recCnt := 1000000
 	// recCnt := 360000
 	// recCnt := 200
-	// recCnt := 100
+	recCnt := 100
 	// recCnt := 40
 	// recCnt := 20
 	start := time.Now()
-	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
-	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
+	geo := PopulateData(0.0, 0.0, 0.01, recCnt)
+	// geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
 	t.Logf("proximity data population of %d records took %s", recCnt, time.Since(start))
 	var expect int
 	expect = 20
@@ -98,7 +98,7 @@ func PopulateData(lat float64, lon float64, delta float64, count int) *GeoData {
 			line = []string{"ID", "Title", "Description", "URL", "Bitmap", "Lat", "Lon"}
 		} else {
 			bearing, lat, lon = Spiral(bearing, lat, lon, delta, cnt)
-			line = []string{fmt.Sprintf("%d", cnt), fmt.Sprintf("Title %d", cnt), fmt.Sprintf("Description %d", cnt), fmt.Sprintf("https://test.com/%d", cnt), "0", fmt.Sprintf("%0.6f", lat), fmt.Sprintf("%0.6f", lon)}
+			line = []string{fmt.Sprintf("%d", cnt), fmt.Sprintf("Title %d", cnt), fmt.Sprintf("Description %d", cnt), fmt.Sprintf("https://test.com/%d", cnt), fmt.Sprintf("%d",cnt), fmt.Sprintf("%0.6f", lat), fmt.Sprintf("%0.6f", lon)}
 		}
 		err := geo.ImportLine(&headerPos, line, i)
 		if err != nil {
@@ -107,6 +107,23 @@ func PopulateData(lat float64, lon float64, delta float64, count int) *GeoData {
 	}
 	geo.PopulateIndexes("test")
 	return geo
+}
+
+func TestLogic(t *testing.T) {
+	expect := 2
+	geo := PopulateData(0.0, 0.0, 0.0001, expect)
+	res0 := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km")
+	if len(res0) != 2 {
+		t.Errorf("Failed to get all records with a 0 bitmask")
+	}
+	res1 := geo.Find(float64(0), float64(0), uint64(1), uint64(expect), "km")
+	if len(res1) != 1 || res1[0].ID != "1" {
+		t.Errorf("Failed to get only the first record with a 1 bitmask")
+	}
+	res2 := geo.Find(float64(0), float64(0), uint64(2), uint64(expect), "km")
+	if len(res2) != 1 || res2[0].ID != "2" {
+		t.Errorf("Failed to get only the second record with a 2 bitmask")
+	}
 }
 
 func Spiral(bearing rune, lat, lon, delta float64, i int) (rune, float64, float64) {

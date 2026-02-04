@@ -346,12 +346,14 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			if _, exists := uniqueRecords[rec]; exists {
 				continue
 			}
+			uniqueRecords[rec] = true
+
 			// check each record matches the bitmask, if provided
 			if bitmask > 0 {
 				// Assume A OR B OR C ... for the bitmask
 				// we will add more boolean logic later...
-				if rec.Bitmap & bitmask > 0 {
-					// the OR logic failed, so return early
+				if (rec.Bitmap & bitmask) == 0 {
+					// the OR logic FAILED, so return early
 					// but continue iterating (true)
 					return true
 				}
@@ -363,7 +365,6 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			}
 			// add the record to our intermediate slice of records
 			recs = append(recs, *rec)
-			uniqueRecords[rec] = true
 		}
 		return true
 	}
