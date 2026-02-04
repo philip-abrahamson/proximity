@@ -55,6 +55,9 @@ Proximity is a Gin application, and can be deployed using Gin's instructions her
 On start-up, the executable "proximity" imports data from a CSV file,
 which by default should be named "proximity.csv" in the same directory.
 See proximity.csv in this code for a small data sample.
+Note that IDs are optional, and will become an ascending integer count
+if left blank (although they are considered strings). If IDs are included,
+they must be unique across the record set.
 This CSV data is parsed & read into memory, and will persist for the lifetime of
 the process.  If you make updates to the CSV file you will need to
 restart the proximity executable for those changes to apply.
