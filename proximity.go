@@ -205,7 +205,7 @@ func processJob(geo *geodata.GeoData, job Job, mode string) {
 
 	// Make the geospatial query
 	// TODO - bitmask in future might instead be a boolean logic expression...
-	res := geo.Find(lat, lon, bitmask, maxResults(), units())
+	res := geo.Find(lat, lon, bitmask, maxResults(), units(), mode)
 
 	// post the results back to the results channel in the job
 	job.Results <- res

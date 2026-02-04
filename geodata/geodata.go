@@ -293,14 +293,14 @@ func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err
 }
 
 // Search the geodata for matching records
-func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units string) []ResultRecord {
+func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units string, mode string) []ResultRecord {
 
 	// final results to return
 	var res []ResultRecord
 	// intermediate slice of records to sort & potentially limit before becoming results
 	var recs []Record
 
-	uniqueRecords := make(map[*Record]bool)
+	uniqueRecords := make(map[string]bool)
 
 	// Don't go past the number of results desired when
 	// walking along either peano curve in either direction
@@ -343,10 +343,10 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 		}
 		for i := 0; i < len(candidates); i++ {
 			rec := candidates[i]
-			if _, exists := uniqueRecords[rec]; exists {
+			if _, exists := uniqueRecords[rec.ID]; exists {
 				continue
 			}
-			uniqueRecords[rec] = true
+			uniqueRecords[rec.ID] = true
 
 			// check each record matches the bitmask, if provided
 			if bitmask > 0 {
@@ -394,6 +394,13 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, iteratorDown2)
 	}
 
+	// if mode != "release" {
+	// 	log.Print("Candidate records:")
+	// 	for _, v := range recs {
+	// 		log.Print(v)
+	// 	}
+	// }
+
 	// Sort by proximity before cutting down to the expected result count.
 	// One option here might be to use a fake proximity e.g. (abs(x) + abs(y))
 	// instead of the accurate (x*x) + (y*y) (we don't need to take a square
@@ -405,16 +412,24 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	// calculations.
 	// Perhaps if a larger number of results were being returned it might
 	// be worthwhile?
-	recProx := map[*Record]float64{}
+	recProx := make(map[string]float64)
 	for _, rec := range recs {
 		deltaLat := lat - rec.Lat
-		recProx[&rec] = proximityForSort(deltaLat/2, deltaLat, lon - rec.Lon)
+		recProx[rec.ID] = proximityForSort(deltaLat/2, deltaLat, lon - rec.Lon)
 	}
-	slices.SortFunc(recs, func(a, b Record) int {
-		proxA, _ := recProx[&a]
-		proxB, _ := recProx[&b]
+	sorter := func(a, b Record) int {
+		proxA, _ := recProx[a.ID]
+		proxB, _ := recProx[b.ID]
 		return cmp.Compare(proxA, proxB)
-	})
+	}
+	slices.SortFunc(recs, sorter)
+
+	// if mode != "release" {
+	// 	log.Print("Prox sorted candidate records:")
+	// 	for _, v := range recs {
+	// 		log.Print(v)
+	// 	}
+	// }
 
 	// Cut down the results by slicing by either the smaller of the desired
 	// max records or the count of the current results
@@ -432,7 +447,7 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			Bitmap: rec.Bitmap,
 			Lat: rec.Lat,
 			Lon: rec.Lon,
-			Distance: proximity(recProx[&rec], units),
+			Distance: proximity(recProx[rec.ID], units),
 			Units: units,
 		}
 

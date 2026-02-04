@@ -24,13 +24,13 @@ func TestSpiral(t *testing.T) {
 	// recCnt := 40
 	// recCnt := 20
 	start := time.Now()
-	geo := PopulateData(0.0, 0.0, 0.01, recCnt)
-	// geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
+	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
+	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
 	t.Logf("proximity data population of %d records took %s", recCnt, time.Since(start))
 	var expect int
 	expect = 20
 	fstart := time.Now()
-	res := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km")
+	res := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km", "test")
 	t.Logf("proximity data search of %d records for %d results took %s", recCnt, expect, time.Since(fstart))
 	uniqueIds := make(map[string]bool)
 	ids := []string{}
@@ -60,7 +60,7 @@ func TestSpiral(t *testing.T) {
 	t.Logf("Got %.0f%% of the results we expected\n", float64(100) * float64(cnt)/float64(expect))
 
 	// try another search at another location
-	res2 := geo.Find(float64(50), float64(1.12345), uint64(0), uint64(expect), "km")
+	res2 := geo.Find(float64(50), float64(1.12345), uint64(0), uint64(expect), "km", "test")
 	ids = []string{}
 	for _, r := range res2 {
 		ids = append(ids, r.ID)
@@ -72,7 +72,7 @@ func TestSpiral(t *testing.T) {
 	t0 := time.Now()
 	for lat := -90; lat <= 90; lat++ {
 		for lon := -180; lon <= 180; lon++ {
-			_ = geo.Find(float64(lat), float64(lon), uint64(0), uint64(expect), "km")
+			_ = geo.Find(float64(lat), float64(lon), uint64(0), uint64(expect), "km", "test")
 			benchCnt++
 		}
 	}
@@ -112,15 +112,15 @@ func PopulateData(lat float64, lon float64, delta float64, count int) *GeoData {
 func TestLogic(t *testing.T) {
 	expect := 2
 	geo := PopulateData(0.0, 0.0, 0.0001, expect)
-	res0 := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km")
+	res0 := geo.Find(float64(0), float64(0), uint64(0), uint64(expect), "km", "test")
 	if len(res0) != 2 {
 		t.Errorf("Failed to get all records with a 0 bitmask")
 	}
-	res1 := geo.Find(float64(0), float64(0), uint64(1), uint64(expect), "km")
+	res1 := geo.Find(float64(0), float64(0), uint64(1), uint64(expect), "km", "test")
 	if len(res1) != 1 || res1[0].ID != "1" {
 		t.Errorf("Failed to get only the first record with a 1 bitmask")
 	}
-	res2 := geo.Find(float64(0), float64(0), uint64(2), uint64(expect), "km")
+	res2 := geo.Find(float64(0), float64(0), uint64(2), uint64(expect), "km", "test")
 	if len(res2) != 1 || res2[0].ID != "2" {
 		t.Errorf("Failed to get only the second record with a 2 bitmask")
 	}
