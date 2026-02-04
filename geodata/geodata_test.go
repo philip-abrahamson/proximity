@@ -105,7 +105,7 @@ func PopulateData(lat float64, lon float64, delta float64, count int) *GeoData {
 			panic(err)
 		}
 	}
-	geo.PopulateIndexes()
+	geo.PopulateIndexes("test")
 	return geo
 }
 
