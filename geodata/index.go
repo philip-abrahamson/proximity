@@ -1,3 +1,8 @@
+// Copyright Philip Abrahamson 2025-2026
+// Copyright High Country Software Ltd 2002-2004
+//
+// Licensed under the GNU General Public License version 2.0 (GPLv2)
+
 package geodata
 
 import (
@@ -8,8 +13,8 @@ import (
 
 // PeanoIndex loosely follows the interface of llrb
 // "github.com/petar/GoLLRB/llrb" which we originally
-// intended to use here, but discovered it was too slow
-// for our purposes.
+// intended to use here, but discovered was suboptimal
+// when used in our particular application.
 // PeanoIndex, unlike llrb, is currently a write-once
 // data structure.  It requires a call to Process()
 // before use.
@@ -95,13 +100,14 @@ func (pi *PeanoIndex) Process() {
 // codes and feed them one by one into the 'iterator' function passed in.
 // The iterator function must return false at some point when enough
 // results have been collected.
-// 'first' is just a boolean flag to indicate whether this is the first
-// or subsequent call, which helps us optimise the finding of peano codes.
-func (pi *PeanoIndex) AscendGreaterOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) {
+func (pi *PeanoIndex) AscendGreaterOrEqual(p Peano, iterator func(p Peano, first bool) bool) {
+	first := true
 	pi.ascendGreaterOrEqual(p, first, iterator)
 }
 
 // recursive function which exits when the iterator function returns false
+// 'first' is just a boolean flag to indicate whether this is the first
+// or subsequent call, which helps us optimise the finding of peano codes.
 func (pi *PeanoIndex) ascendGreaterOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) bool {
 	var nextPeano Peano
 	if first {
@@ -134,13 +140,14 @@ func (pi *PeanoIndex) ascendGreaterOrEqual(p Peano, first bool, iterator func(p 
 // codes and feed them one by one into the 'iterator' function passed in.
 // The iterator function must return false at some point when enough
 // results have been collected.
-// 'first' is just a boolean flag to indicate whether this is the first
-// or subsequent call, which helps us optimise the finding of peano codes.
-func (pi *PeanoIndex) DescendLessOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) {
+func (pi *PeanoIndex) DescendLessOrEqual(p Peano, iterator func(p Peano, first bool) bool) {
+	first := true
 	pi.descendLessOrEqual(p, first, iterator)
 }
 
 // descendLessOrEqual is a recursive function which exits when the iterator function returns false
+// 'first' is just a boolean flag to indicate whether this is the first
+// or subsequent call, which helps us optimise the finding of peano codes.
 func (pi *PeanoIndex) descendLessOrEqual(p Peano, first bool, iterator func(p Peano, first bool) bool) bool {
 	var prevPeano Peano
 	if first {
@@ -189,28 +196,28 @@ type binaryResults struct {
 // and populates nextIndex and prevIndex in every case
 func (pi *PeanoIndex) binarySearch(p Peano, minIndex int, maxIndex int) binaryResults {
 	for {
-		try := minIndex + int((maxIndex - minIndex) / 2)
-		pTry := pi.Peanos[try]
-		if pTry == p {
+		attempt := minIndex + int((maxIndex - minIndex) / 2)
+		pAttempt := pi.Peanos[attempt]
+		if pAttempt == p {
 			// Found it! - look up the previous and next indexes
-			links := pi.Links[pTry]
+			links := pi.Links[pAttempt]
 			res := binaryResults{
 				found: true,
-				peanoIndex: try,
+				peanoIndex: attempt,
 				prevIndex: links[0],
 				nextIndex: links[1],
 			}
 			return res
 		}
-		if pTry > p {
-			maxIndex = try
+		if pAttempt > p {
+			maxIndex = attempt
 		} else {
-			minIndex = try
+			minIndex = attempt
 		}
 		if maxIndex - minIndex <= 1 {
 			// The peano could not be found
-			// so return the prev and next links of the try
-			links := pi.Links[pTry]
+			// so return the prev and next links of the attempt
+			links := pi.Links[pAttempt]
 			res := binaryResults{
 				found: false,
 				prevIndex: links[0],

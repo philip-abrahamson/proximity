@@ -1,3 +1,8 @@
+// Copyright Philip Abrahamson 2025-2026
+// Copyright High Country Software Ltd 2002-2004
+//
+// Licensed under the GNU General Public License version 2.0 (GPLv2)
+
 package geodata
 
 import (
@@ -314,13 +319,6 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	maxAttemptsDown1 = maxAt
 	maxAttemptsDown2 = maxAt
 
-	// track the first binary search
-	// which helps us optimise subsequent movements along the peano curve
-	firstSearchUp1 := true
-	firstSearchDown1 := true
-	firstSearchUp2 := true
-	firstSearchDown2 := true
-
 	if units != "mi" {
 		units = "km"
 	}
@@ -384,15 +382,15 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	}
 
 	// traverse each index up and down and merge the results into recs
-	geo.peanoIndex1.AscendGreaterOrEqual(peano1, firstSearchUp1, iteratorUp1)
+	geo.peanoIndex1.AscendGreaterOrEqual(peano1, iteratorUp1)
 	if (peano1 > 0) {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, firstSearchDown1, iteratorDown1)
+		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, iteratorDown1)
 	}
-	geo.peanoIndex2.AscendGreaterOrEqual(peano2, firstSearchUp2, iteratorUp2)
+	geo.peanoIndex2.AscendGreaterOrEqual(peano2, iteratorUp2)
 	if (peano2 > 0) {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, firstSearchDown2, iteratorDown2)
+		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, iteratorDown2)
 	}
 
 	// Sort by proximity before cutting down to the expected result count.
