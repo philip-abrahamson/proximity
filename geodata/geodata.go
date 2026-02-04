@@ -32,11 +32,8 @@ type Peano uint32
 // We started with 16 bits, but that provides a resolution of
 // about 600m, (diameter of world ~40,000km / 2**16) which might not suit all applications.
 // 19 bits would be under 100m.
-// However, the larger the number of bits, the longer the PeanoIndex
-// e.g. 19 bits will lead to 524,288 array elements
-// per index, whereas 16bits is only 65,536 elements
 // IF CHANGING THIS - you must also manually change PeanoIndex (index.go) to use a size of 2**PeanoBits
-// and use uint32 instead of uint16 when casting ints...
+// and use uint32 instead of uint16 when casting ints in digitiseDegrees...
 // SEE ALSO CalcPeano() which has this hardcoded currently...
 const PeanoBits = 16
 
@@ -474,7 +471,7 @@ func storeHeaders(hp *HeaderPosition, line []string) {
 // the earth is closer to an ellipsoid).
 func CalcPeano(lat, lon float64) Peano {
 
-	// TODO - use PeanoBits to generalise this instead of assuming 16bits
+	// TODO - use PeanoBits to generalise this func instead of assuming 16bits
 	lat16, lon16 := digitiseDegrees(lat, lon)
 
 	var maskIn uint16
@@ -490,7 +487,6 @@ func CalcPeano(lat, lon float64) Peano {
 	maskIn = 1
 	maskOut = 2
 
-	// TODO - use PeanoBits to generalise this instead of assuming 16bits
 	for i := 0; i < 16; i++ {
 
 		if (lat16 & maskIn) != 0 {
@@ -503,7 +499,6 @@ func CalcPeano(lat, lon float64) Peano {
 
 	maskIn = 1
 	maskOut = 1
-	// TODO - use PeanoBits to generalise this instead of assuming 16bits
 	for i := 0; i < 16; i++ {
 
 		if (lon16 & maskIn) != 0 {
