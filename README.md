@@ -105,13 +105,13 @@ restart the proximity executable for those changes to apply.
 
 Environment variables:
 
-MODE - debug, release, or test
-PORT - defaults to 8080
-DATAFILE - defaults to "proximity.csv", is the filepath to
-           the CSV file to import.
-MAX_RESULTS - defaults to 20. Searches will return this number of
-              results or fewer
-UNITS - defaults to "km", but can also be set to "mi" for miles.
+    MODE - debug, release, or test
+    PORT - defaults to 8080
+    DATAFILE - defaults to "proximity.csv", is the filepath to
+               the CSV file to import.
+    MAX_RESULTS - defaults to 20. Searches will return this number of
+                  results or fewer
+    UNITS - defaults to "km", but can also be set to "mi" for miles.
 
 ## Tests
 
