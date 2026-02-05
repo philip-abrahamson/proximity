@@ -11,15 +11,16 @@
 package main
 
 import (
-	"localhost/proximity/geodata"
-	"github.com/aviddiviner/gin-limit"
-	"github.com/gin-gonic/gin"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
 	"strconv"
+
+	"localhost/proximity/geodata"
+	"github.com/aviddiviner/gin-limit"
+	"github.com/gin-gonic/gin"
 )
 
 const DefaultDataFile = "proximity.csv"
@@ -105,6 +106,18 @@ type Job struct {
 
 func main() {
 
+	router := setupRouter()
+
+	// Start server on the port specified by the PORT environment variable (8080 by default)
+	log.Printf("Proximity search API running on port %d...\n", port())
+	router.Run(fmt.Sprintf(":%d", port()))
+}
+
+// setupRouter imports our geospatial data and sets up the
+// Gin API server router, returning:
+// the router, a channel to accept jobs, and the
+// mode, i.e. "testing", "debug", or "release"
+func setupRouter() *gin.Engine {
 	mode := Mode()
 	gin.SetMode(mode)
 	log.Printf("Proximity is in %s mode\n", mode)
@@ -158,9 +171,7 @@ func main() {
 		}
 	})
 
-	// Start server on the port specified by the PORT environment variable (8080 by default)
-	log.Printf("Proximity search API running on port %d...\n", port())
-	router.Run()
+	return router
 }
 
 func port() int {

@@ -67,7 +67,26 @@ func TestSpiral(t *testing.T) {
 	}
 	t.Logf("Second search at a different location, IDs returned: %s\n", strings.Join(ids, ", "))
 
-	// benchmark the search a little by traversing the globe
+}
+
+// TestGlobeTraverse traverses the globe for benchmarking purposes
+// (although this is the backend environment running in a single thread,
+// rather than a multi-threaded API using multiple CPUs.)
+func TestGlobeTraverse(t *testing.T) {
+	recCnt := 1000000
+	// recCnt := 360000
+	// recCnt := 200
+	// recCnt := 100
+	// recCnt := 40
+	// recCnt := 20
+	start := time.Now()
+	// geo := PopulateData(0.0, 0.0, 0.01, recCnt)
+	geo := PopulateData(0.0, 0.0, 0.0001, recCnt)
+	t.Logf("proximity data population of %d records took %s", recCnt, time.Since(start))
+	var expect int
+	expect = 20
+
+	// benchmark the search by traversing the globe
 	benchCnt := 0
 	t0 := time.Now()
 	for lat := -90; lat <= 90; lat++ {
