@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"localhost/proximity/geodata"
+	"github.com/philip-abrahamson/proximity/geodata"
 	"github.com/stretchr/testify/assert"
 )
 

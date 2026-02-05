@@ -18,7 +18,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"localhost/proximity/geodata"
+	"github.com/philip-abrahamson/proximity/geodata"
 	"github.com/aviddiviner/gin-limit"
 	"github.com/gin-gonic/gin"
 )
