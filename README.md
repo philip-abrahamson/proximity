@@ -75,13 +75,13 @@ Also see "Boolean Filtering" for an explanation of the "bitmap" field.
 
 ## Installation
 
-$ go build .
+    $ go build .
 
 This will create a single executable file called "proximity" in the source directory.
 
 ## Use
 
-$ ./proximity
+    $ ./proximity
 
 ## Deployment
 
@@ -105,19 +105,19 @@ restart the proximity executable for those changes to apply.
 
 Environment variables:
 
-    MODE - debug, release, or test
-    PORT - defaults to 8080
-    DATAFILE - defaults to "proximity.csv", is the filepath to
-               the CSV file to import.
+    MODE        - debug, release, or test
+    PORT        - defaults to 8080
+    DATAFILE    - defaults to "proximity.csv", is the filepath to
+                  the CSV file to import.
     MAX_RESULTS - defaults to 20. Searches will return this number of
                   results or fewer
-    UNITS - defaults to "km", but can also be set to "mi" for miles.
+    UNITS       - defaults to "km", but can also be set to "mi" for miles.
 
 ## Tests
 
 Run the tests with:
 
-$ go test -v -count=1 ./...
+    $ go test -v -count=1 ./...
 
 
 
@@ -173,4 +173,4 @@ Licensed under the GNU General Public License version 2.0 (GPLv2)
 This software borrows some strategies and code which were authored around the turn
 of the century by High Country Software Ltd, whose development team consisted of
 the brothers Philip and Peter Abrahamson.  That older code was originally
-open-sourced under a GPL v2 licence, which I've attached to this new code.
+open-sourced under a GPL v2 licence, which has been attached to this new code.
