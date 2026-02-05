@@ -179,6 +179,12 @@ func (pi *PeanoIndex) descendLessOrEqual(p Peano, first bool, iterator func(p Pe
 	return pi.descendLessOrEqual(prevPeano, first, iterator)
 }
 
+// The idea here is to save ourselves up to 16 binary searches
+// by subdividing the space into "ranges" each consisting of
+// the high 16 bits of Peano codes.  We precalculate the
+// high and low index positions for each range, so we can
+// give ourselves a headstart when we perform a binary
+// search.
 func (pi *PeanoIndex) rangeSearch(p Peano) (int, int) {
 	high16 := highBits(p)
 	irange, exists := pi.Ranges[high16]

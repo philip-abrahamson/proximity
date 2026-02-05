@@ -23,6 +23,7 @@ import (
 )
 
 const DefaultDataFile = "proximity.csv"
+const DefaultPort = 8080
 const DefaultMaxResults = 20
 const LimitMaxResults = 100
 const FloatSize = 64
@@ -36,15 +37,80 @@ type Job struct {
 	Results chan<- geodata.Results
 }
 
+// Proximity is a high performance geospatial search engine written in Go / Golang which identifies records
+// near to a search location, and can perform some simple boolean "OR" logic to filter records.  It is optimised
+// for speed over accuracy, and is more suitable for certain applications than others.  For instance, it wouldn't
+// be recommended for a geographic asset identifier, but could work well for a consumer facing search of
+// e.g. coffee shops.
+//
+// It is memory based, and frighteningly fast. On an i7, 16G RAM machine, with a million test records, each
+// test search on the backend takes about 35 microseconds on average (~30,000 per second).  Given that the
+// API server makes use of multiple CPUs and threads, the total throughput is more likely to be limited by
+// bandwidth than CPU.
+//
+// The reason for its high performance, scalability, and sometimes indifferent accuracy is because it
+// uses a "fractal space filling curve" or "Peano" curve, named after the 19th century Italian
+// mathematician Giuseppe Peano.  While an accurate, but much slower, proximity search will
+// query the two dimensions of latitude and longitude for records, a fractal space filling curve
+// is a one dimensional curve which snakes around two dimensional space, spiralling in and out,
+// until it fills up the space to some predetermined resolution.  Each 2D latitude and logitude
+// location is first converted into a one dimensional "Peano code" integer representing the distance
+// along the curve.  Querying a one dimensional integer index to obtain an approximation of
+// proximity is much quicker than e.g. querying the differences between 2D locations of a
+// search and a collection of records.
+//
+// Our Proximity engine improves on some of the inaccuracy of a single Peano curve by:
+//
+// (1) Using two curves, offset from each other to help minimise some of the issues
+// encountered with a single curve when large "jumps" in the curves occur.
+//
+// (2) Using a traditional 2D proximity approach once a small subset of candidate search
+// records have been obtained using the Peano curves.
+//
+// The engine works by importing a CSV file of geospatial data into memory
+// and then setting up an HTTP API service to answer queries such as:
+//
+// http://localhost:8080/?lat=51.123456&lon=-1.0&bitmask=0
+//
+// Which will return a set of JSON results like:
+// [
+//   {
+//     "id": "ID2",
+//     "title": "Second title",
+//     "description": "Second description",
+//     "url": "https://sometesturl.com/2",
+//     "bitmap": 2,
+//     "lat": 51.123456,
+//     "lon": -1.123456,
+//     "distance": 13.72768992,
+//     "units": "km"
+//   },
+//   {
+//     "id": "ID3",
+//     "title": "Third title",
+//     "description": "Third description",
+//     "url": "https://sometesturl.com/3",
+//     "bitmap": 3,
+//     "lat": 52.123456,
+//     "lon": -1.123456,
+//     "distance": 112.03917839550444,
+//     "units": "km"
+//   },
+//   ...
+// ]
+//
+// BTW Don't be fooled by the distance field's number of decimal places.
+// It's probably no more accurate than one or maybe two decimal places,
+// and is "as the drone or crow flies" instead of distance by windy road.
+
 func main() {
 
 	mode := Mode()
 	gin.SetMode(mode)
-	if mode != "release" {
-		log.Printf("proximity is now in %s mode\n", mode)
-	}
+	log.Printf("Proximity is in %s mode\n", mode)
 
 	// generate the proximity data & indices from a CSV file
+	log.Print("Importing data...")
 	geo := new(geodata.GeoData)
 	err := geo.Import( datafile(), mode )
 	if err != nil {
@@ -92,8 +158,21 @@ func main() {
 		}
 	})
 
-	// Start server on port 8080 (default)
+	// Start server on the port specified by the PORT environment variable (8080 by default)
+	log.Printf("Proximity search API running on port %d...\n", port())
 	router.Run()
+}
+
+func port() int {
+	port := os.Getenv("PORT")
+	if port != "" {
+		i, e := strconv.Atoi(port)
+		if e != nil {
+			panic(e)
+		}
+		return i
+	}
+	return DefaultPort
 }
 
 func datafile() string {

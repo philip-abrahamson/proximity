@@ -37,7 +37,7 @@ type Peano uint32
 // SEE ALSO CalcPeano() which has this hardcoded currently...
 const PeanoBits = 16
 
-// Each Record includes:
+// Record holds the raw geographic data. It includes:
 // Title, Description for free text data
 // URL, an optional hyperlink
 // Bitmap, a 64 bit integer bitmap designed to store up to 64 binary flags
@@ -61,12 +61,19 @@ type Record struct {
 	Description string `json:"description"`
 	URL string `json:"url"`
 	Bitmap uint64 `json:"bitmap"`
-	Lat float64 `json:"lat" binding:"required,float64"`
-	Lon float64 `json:"lon" binding:"required,float64"`
-	Peano1 Peano
-	Peano2 Peano
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+	Peano1 Peano `json:"peano1"`
+	Peano2 Peano `json:"peano2"`
 }
 
+// ResultRecord is a record presented to the API output which has a few subtle
+// differences from the Record struct holding the data, and includes additional
+// calculated fields like the distance from the search location, and the units
+// of that distance.  Note that despite returning a floating point decimal for
+// the distance with many decimal places, its real accuracy is somewhat limited,
+// and for presentation of the distance to an end user perhaps no more than one
+// decimal place would be recommended...
 type ResultRecord struct {
 	ID string `json:"id" binding:"required,string"`
 	Title string `json:"title"`
@@ -110,10 +117,15 @@ type ResultRecord struct {
 // property in the bitmap, because the scan of each record could
 // continue through the majority of all records before finding
 // a matching record.
-// We will need to limit the number of records searched
-// in these cases, and cut off the search with a message like
-// "no results for X found within a range of Y km/mi"
-// What would help here is something like a count or other
+// We limit the number of records searched in these cases.
+// But this number - currently in func Find, could be tweaked
+// to increase how far through the records we look:
+//    // currently set to 4 * the number of results
+//    // we're looking for, but could be higher if
+//    // necessary
+//    maxAt = int(max * 4)
+//
+// What could help here is something like a count or other
 // indication of the distribution of a query property among
 // the records, and if this count were too low we could
 // instead use an alternative index based on the direct
@@ -236,6 +248,7 @@ func (geo *GeoData) PopulateIndexes(mode string) {
 	return
 }
 
+// ImportLine imports a line of data into our in-memory search system
 func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err error) {
 
 	// handle the header line by storing the header positions
@@ -369,6 +382,7 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 		return true
 	}
 
+	// curry some additional data into the iterators
 	iteratorUp1 := func(p Peano, first bool) bool {
 		return iterator(p, &maxAttemptsUp1, &maxResUp1, geo.peanoMap1)
 	}
@@ -457,6 +471,7 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	return res
 }
 
+// storeHeaders handles the CSV header line, saving header positions
 func storeHeaders(hp *HeaderPosition, line []string) {
 	for i, v := range line {
 		switch v {
@@ -481,10 +496,10 @@ func storeHeaders(hp *HeaderPosition, line []string) {
 	return
 }
 
-// Create two peano codes from a floating point latitude/longitude
-// value on the earth's surface. Assume a spherical projection
-// where 1.0 latitude = 1.0 longitude (although in reality
-// the earth is closer to an ellipsoid).
+// CalcPeano calculates a peano code from a floating point latitude/longitude
+// coordinate on the earth's surface. Assumes a spherical projection
+// where 1.0 latitude = 1.0 longitude (although in reality the earth
+// is closer to an ellipsoid).
 func CalcPeano(lat, lon float64) Peano {
 
 	// TODO - use PeanoBits to generalise this func instead of assuming 16bits
@@ -528,12 +543,15 @@ func CalcPeano(lat, lon float64) Peano {
 	return Peano(peano)
 }
 
+// CalcPeanoOffset calculates an offset geo coordinate for
+// our secondary peano codes
 func CalcPeanoOffset(lat, lon float64) (peano Peano) {
-	// calculate an offset geo coordinate for our second peano code
 	latOffset, lonOffset := Offset(lat, lon)
 	return CalcPeano(latOffset, lonOffset)
 }
 
+// digitiseDegrees converts a floating point geospatial
+// coordinate into a lower resolution integer coordinate
 func digitiseDegrees(lat, lon float64) (lat16, lon16 uint16) {
 	// Convert the lat/lon into 16 bit ints
 	// centered on the equator (ie. 32768=Equator)
@@ -576,6 +594,8 @@ func Offset(lat, lon float64) (latOff, lonOff float64) {
 // We use only positive latitudes to save space, should we
 // increase the size of this table.
 var cosineTable map[int]float64
+// cosineEstimate looks up our cosineTable for a fast
+// estimate of the cos trigonometric function.
 func cosineEstimate(latInt int) float64 {
 	if cosineTable == nil {
 		generateCosineTable()
@@ -591,6 +611,8 @@ func cosineEstimate(latInt int) float64 {
 	return cosineTable[latInt]
 }
 
+// generateCosineTable creates a lookup table
+// for fast estimation of the cos trig function
 func generateCosineTable() {
 	cosineTable = make(map[int]float64)
 	for deg := 0; deg <= 90; deg++ {
@@ -610,6 +632,18 @@ func proximityForSort(meanLat float64, latD float64, lonD float64) float64 {
 	return (latD * latD) + (lonD * cosLonEstimate * lonD * cosLonEstimate)
 }
 
+// proximity takes an input proxForSort which would have been
+// calculated by func proximityForSort, and finally performs
+// the dreaded square-root function to get an estimate
+// of the real distance between the search location and a
+// record result location.  This is a distance
+// "as the crow flies", and is not something fancy like a
+// route distance along roads.  It contains some other
+// inaccuracies mentioned elsewhere in this code, such
+// as use of a rough cosine lookup table, spherical map
+// projection, and rough radius of the earth figure.
+// Inspite of all these issues, it should provide a
+// decent ball-park figure.
 func proximity(proxForSort float64, units string) float64 {
 	proxDegrees := math.Sqrt(proxForSort)
 	if units == "mi" {
@@ -617,5 +651,3 @@ func proximity(proxForSort float64, units string) float64 {
 	}
 	return proxDegrees * KmPerDegree
 }
-
-// type bspTree

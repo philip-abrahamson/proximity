@@ -11,7 +11,7 @@ be recommended for a geographic asset identifier, but could work well for a cons
 e.g. coffee shops.
 
 It is memory based, and frighteningly fast. On an i7, 16G RAM machine, with a million test records, each
-test search on the backend takes about 20 microseconds on average (~50,000 per second).  Given that the
+test search on the backend takes about 35 microseconds on average (~30,000 per second).  Given that the
 API server makes use of multiple CPUs and threads, the total throughput is more likely to be limited by
 bandwidth than CPU.
 
@@ -33,6 +33,45 @@ encountered with a single curve when large "jumps" in the curves occur.
 
 (2) Using a traditional 2D proximity approach once a small subset of candidate search
 records have been obtained using the Peano curves.
+
+The engine works by importing a CSV file of geospatial data into memory
+and then setting up an HTTP API service to answer queries such as:
+
+    http://localhost:8080/?lat=51.123456&lon=-1.0&bitmask=0
+
+Which will return a set of JSON results like:
+
+    [
+      {
+        "id": "ID2",
+        "title": "Second title",
+        "description": "Second description",
+        "url": "https://sometesturl.com/2",
+        "bitmap": 2,
+        "lat": 51.123456,
+        "lon": -1.123456,
+        "distance": 13.72768992,
+        "units": "km"
+      },
+      {
+        "id": "ID3",
+        "title": "Third title",
+        "description": "Third description",
+        "url": "https://sometesturl.com/3",
+        "bitmap": 3,
+        "lat": 52.123456,
+        "lon": -1.123456,
+        "distance": 112.03917839550444,
+        "units": "km"
+      },
+      ...
+    ]
+
+BTW Don't be fooled by the distance field's number of decimal places.
+It's probably no more accurate than one or maybe two decimal places,
+and is "as the drone or crow flies" instead of distance by windy road.
+
+Also see "Boolean Filtering" for an explanation of the "bitmap" field.
 
 ## Installation
 
@@ -88,7 +127,7 @@ Currently you can apply a limited boolean "OR" filter to the search.
 There are plans to extend this in future, and make this friendlier
 to use.
 
-For the current version of this, you have the ability to set a series
+For the current version, you have the ability to set a series
 of 64 arbitrary boolean flags in a bitmap, and search for these using
 a matching bitmask.
 
@@ -132,5 +171,5 @@ Licensed under the GNU General Public License version 2.0 (GPLv2)
 
 This software borrows some strategies and code which were authored around the turn
 of the century by High Country Software Ltd, whose development team consisted of
-myself and my brother, Peter Abrahamson.  That older code was originally open-sourced
-under a GPL v2 licence, which I've attached to this new code.
+the brothers Philip and Peter Abrahamson.  That older code was originally
+open-sourced under a GPL v2 licence, which I've attached to this new code.
