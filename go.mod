@@ -1,4 +1,4 @@
-module localhost/proximity
+module github.com/philip-abrahamson/proximity
 
 go 1.25.5
 
