@@ -28,10 +28,10 @@ search and a collection of records.
 
 Our Proximity engine improves on some of the inaccuracy of a single Peano curve by:
 
-(1) Using two curves, offset from each other to help minimise some of the issues
+1. Using two curves, offset from each other to help minimise some of the issues
 encountered with a single curve when large "jumps" in the curves occur.
 
-(2) Using a traditional 2D proximity approach once a small subset of candidate search
+2. Using a traditional 2D proximity approach once a small subset of candidate search
 records have been obtained using the Peano curves.
 
 The engine works by importing a CSV file of geospatial data into memory
@@ -87,7 +87,7 @@ $ ./proximity
 
 Proximity is a Gin application, and can be deployed using Gin's instructions here:
 
-[Gin application deployment instructions] (https://gin-gonic.com/en/docs/deployment/)
+https://gin-gonic.com/en/docs/deployment/
 
 ## Data Import
 
@@ -165,6 +165,7 @@ Vegan OR Indian restaurants: 0x0000000000000011
 ## Copyright & Licensing
 
 Copyright Philip Abrahamson 2025-2026
+
 Copyright High Country Software Ltd 2002-2004
 
 Licensed under the GNU General Public License version 2.0 (GPLv2)
