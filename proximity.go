@@ -8,36 +8,6 @@
 // in this file, because it uses uncommon and/or experimental
 // techniques which would not be appreciated by most developers.
 
-package main
-
-import (
-	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"runtime"
-	"strconv"
-
-	"github.com/philip-abrahamson/proximity/geodata"
-	"github.com/aviddiviner/gin-limit"
-	"github.com/gin-gonic/gin"
-)
-
-const DefaultDataFile = "proximity.csv"
-const DefaultPort = 8080
-const DefaultMaxResults = 20
-const LimitMaxResults = 100
-const FloatSize = 64
-const BitmaskSize = 64
-const MaxResultsSize = 64
-
-type Job struct {
-	Lat float64
-	Lon float64
-	Bitmask uint64
-	Results chan<- geodata.Results
-}
-
 // Proximity is a high performance geospatial search engine written in Go / Golang which identifies records
 // near to a search location, and can perform some simple boolean "OR" logic to filter records.  It is optimised
 // for speed over accuracy, and is more suitable for certain applications than others.  For instance, it wouldn't
@@ -103,6 +73,36 @@ type Job struct {
 // BTW Don't be fooled by the distance field's number of decimal places.
 // It's probably no more accurate than one or maybe two decimal places,
 // and is "as the drone or crow flies" instead of distance by windy road.
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"runtime"
+	"strconv"
+
+	"github.com/philip-abrahamson/proximity/geodata"
+	"github.com/aviddiviner/gin-limit"
+	"github.com/gin-gonic/gin"
+)
+
+const DefaultDataFile = "proximity.csv"
+const DefaultPort = 8080
+const DefaultMaxResults = 20
+const LimitMaxResults = 100
+const FloatSize = 64
+const BitmaskSize = 64
+const MaxResultsSize = 64
+
+// Job defines each queued search which will be run by the worker pool
+type Job struct {
+	Lat float64
+	Lon float64
+	Bitmask uint64
+	Results chan<- geodata.Results
+}
 
 func main() {
 
@@ -217,6 +217,8 @@ func units() string {
 	return units
 }
 
+// Mode determines whether Proximity should run in "debug", "test", or "release" mode.
+// It can be set with the environment variable MODE, and defaults to "release".
 func Mode() string {
 	mode := os.Getenv("MODE")
 	if mode == "debug" || mode == "test" || mode == "release" {
