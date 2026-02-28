@@ -8,6 +8,9 @@
 // in this file, because it uses uncommon and/or experimental
 // techniques which would not be appreciated by most developers.
 
+// Package geodata contains supporting geospatial data & functions
+// for the Proximity search engine.  Notably, it includes functionality
+// dealing with fractal space filling curves, or "Peano" curves.
 package geodata
 
 import (
