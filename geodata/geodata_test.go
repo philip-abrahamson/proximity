@@ -6,10 +6,10 @@
 package geodata
 
 import (
-	"testing"
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -51,13 +51,13 @@ func TestSpiral(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		if id <= expect  {
+		if id <= expect {
 			cnt++
 		}
 	}
 	// We don't test for 100% here, because the results could potentially be erratic.
 	// Our system is designed for speed over accuracy.
-	t.Logf("Got %.0f%% of the results we expected\n", float64(100) * float64(cnt)/float64(expect))
+	t.Logf("Got %.0f%% of the results we expected\n", float64(100)*float64(cnt)/float64(expect))
 
 	// try another search at another location
 	res2 := geo.Find(float64(50), float64(1.12345), uint64(0), uint64(expect), "km", "test")
@@ -110,14 +110,14 @@ func PopulateData(lat float64, lon float64, delta float64, count int) *GeoData {
 	var headerPos HeaderPosition
 	bearing := 'N'
 	// 1 is for the header line
-	for i := 1; i <= count + 1; i++ {
+	for i := 1; i <= count+1; i++ {
 		cnt := i - 1
 		var line []string
 		if i == 1 {
 			line = []string{"ID", "Title", "Description", "URL", "Bitmap", "Lat", "Lon"}
 		} else {
 			bearing, lat, lon = Spiral(bearing, lat, lon, delta, cnt)
-			line = []string{fmt.Sprintf("%d", cnt), fmt.Sprintf("Title %d", cnt), fmt.Sprintf("Description %d", cnt), fmt.Sprintf("https://test.com/%d", cnt), fmt.Sprintf("%d",cnt), fmt.Sprintf("%0.6f", lat), fmt.Sprintf("%0.6f", lon)}
+			line = []string{fmt.Sprintf("%d", cnt), fmt.Sprintf("Title %d", cnt), fmt.Sprintf("Description %d", cnt), fmt.Sprintf("https://test.com/%d", cnt), fmt.Sprintf("%d", cnt), fmt.Sprintf("%0.6f", lat), fmt.Sprintf("%0.6f", lon)}
 		}
 		err := geo.ImportLine(&headerPos, line, i)
 		if err != nil {
@@ -149,17 +149,18 @@ func Spiral(bearing rune, lat, lon, delta float64, i int) (rune, float64, float6
 	// The distance of each arm of the spiral follows an incrementing pattern
 	// 1, 1, 2, 2, 3, 3, ...
 	// where each above number is also multiplied by an input delta
-	arm := delta * float64(int((i + 1)/2))
-	if bearing == 'N' {
+	arm := delta * float64(int((i+1)/2))
+	switch bearing {
+	case 'N':
 		lon -= arm
 		bearing = 'W'
-	} else if bearing == 'W' {
+	case 'W':
 		lat -= arm
 		bearing = 'S'
-	} else if bearing == 'S' {
+	case 'S':
 		lon += arm
 		bearing = 'E'
-	} else if bearing == 'E' {
+	case 'E':
 		lat += arm
 		bearing = 'N'
 	}

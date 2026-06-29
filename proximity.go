@@ -45,29 +45,31 @@
 //
 // Which will return a set of JSON results like:
 // [
-//   {
-//     "id": "ID2",
-//     "title": "Second title",
-//     "description": "Second description",
-//     "url": "https://sometesturl.com/2",
-//     "bitmap": 2,
-//     "lat": 51.123456,
-//     "lon": -1.123456,
-//     "distance": 13.72768992,
-//     "units": "km"
-//   },
-//   {
-//     "id": "ID3",
-//     "title": "Third title",
-//     "description": "Third description",
-//     "url": "https://sometesturl.com/3",
-//     "bitmap": 3,
-//     "lat": 52.123456,
-//     "lon": -1.123456,
-//     "distance": 112.03917839550444,
-//     "units": "km"
-//   },
-//   ...
+//
+//	{
+//	  "id": "ID2",
+//	  "title": "Second title",
+//	  "description": "Second description",
+//	  "url": "https://sometesturl.com/2",
+//	  "bitmap": 2,
+//	  "lat": 51.123456,
+//	  "lon": -1.123456,
+//	  "distance": 13.72768992,
+//	  "units": "km"
+//	},
+//	{
+//	  "id": "ID3",
+//	  "title": "Third title",
+//	  "description": "Third description",
+//	  "url": "https://sometesturl.com/3",
+//	  "bitmap": 3,
+//	  "lat": 52.123456,
+//	  "lon": -1.123456,
+//	  "distance": 112.03917839550444,
+//	  "units": "km"
+//	},
+//	...
+//
 // ]
 //
 // BTW Don't be fooled by the distance field's number of decimal places.
@@ -83,9 +85,9 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/philip-abrahamson/proximity/geodata"
 	"github.com/aviddiviner/gin-limit"
 	"github.com/gin-gonic/gin"
+	"github.com/philip-abrahamson/proximity/geodata"
 )
 
 const DefaultDataFile = "proximity.csv"
@@ -98,8 +100,8 @@ const MaxResultsSize = 64
 
 // Job defines each queued search which will be run by the worker pool
 type Job struct {
-	Lat float64
-	Lon float64
+	Lat     float64
+	Lon     float64
 	Bitmask uint64
 	Results chan<- geodata.Results
 }
@@ -125,7 +127,7 @@ func setupRouter() *gin.Engine {
 	// generate the proximity data & indices from a CSV file
 	log.Print("Importing data...")
 	geo := new(geodata.GeoData)
-	err := geo.Import( datafile(), mode )
+	err := geo.Import(datafile(), mode)
 	if err != nil {
 		panic(err)
 	}
@@ -156,7 +158,7 @@ func setupRouter() *gin.Engine {
 		res := make(chan geodata.Results)
 
 		// post this proximity search as a job for the pool of workers to pick up
-		job := Job{ Lat: lat, Lon: lon, Bitmask: bitmask, Results: res }
+		job := Job{Lat: lat, Lon: lon, Bitmask: bitmask, Results: res}
 		postJob(jobs, job)
 
 		// block until we get the results
@@ -236,7 +238,7 @@ func attachData(geo *geodata.GeoData) gin.HandlerFunc {
 }
 
 func parseParams(context *gin.Context, mode string) (lat, lon float64, bitmask uint64, err error) {
-	for k, v := range map[string]*float64 {"lat": &lat, "lon": &lon} {
+	for k, v := range map[string]*float64{"lat": &lat, "lon": &lon} {
 		param := context.Query(k)
 		*v, err = strconv.ParseFloat(param, FloatSize)
 		if err != nil {
@@ -277,7 +279,6 @@ func poolSize() int {
 
 func postJob(jobs chan<- Job, job Job) {
 	jobs <- job
-	return
 }
 
 func worker(geo *geodata.GeoData, jobs <-chan Job, i int, mode string) {
@@ -301,6 +302,4 @@ func processJob(geo *geodata.GeoData, job Job, mode string) {
 
 	// post the results back to the results channel in the job
 	job.Results <- res
-
-	return
 }

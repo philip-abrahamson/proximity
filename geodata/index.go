@@ -12,7 +12,6 @@ package geodata
 
 import (
 	"cmp"
-	"math"
 	"slices"
 )
 
@@ -38,8 +37,9 @@ type PeanoIndex struct {
 	Ranges map[uint16][2]int
 }
 
-var maxPeano = uint32(math.Pow(2, 32) - 1)
-var minPeano = 0
+// var maxPeano = uint32(math.Pow(2, 32) - 1)
+// var minPeano = 0
+
 const max16bit = 65536
 
 // NewPeanoIndex returns a pointer to
@@ -80,8 +80,8 @@ func (pi *PeanoIndex) Process() {
 	// Populate the first and last links, which wrap around the globe.
 	// (Hopefully not a subtle mistake which e.g. infinitely loops
 	// the binarySearch...)
-	pi.Links[ pi.Peanos[0] ] = [2]int{imax, 1}
-	pi.Links[ pi.Peanos[imax] ] = [2]int{imax - 1, 0}
+	pi.Links[pi.Peanos[0]] = [2]int{imax, 1}
+	pi.Links[pi.Peanos[imax]] = [2]int{imax - 1, 0}
 
 	for i, peano := range pi.Peanos {
 		if i > 0 && i < imax {
@@ -188,17 +188,17 @@ func (pi *PeanoIndex) descendLessOrEqual(p Peano, first bool, iterator func(p Pe
 func (pi *PeanoIndex) rangeSearch(p Peano) (int, int) {
 	high16 := highBits(p)
 	irange, exists := pi.Ranges[high16]
-	if ! exists {
+	if !exists {
 		return 0, len(pi.Peanos) - 1
 	}
 	return irange[0], irange[1]
 }
 
 type binaryResults struct {
-	found bool
+	found      bool
 	peanoIndex int
-	prevIndex int
-	nextIndex int
+	prevIndex  int
+	nextIndex  int
 }
 
 // binarySearch returns a struct of binaryResults
@@ -206,16 +206,16 @@ type binaryResults struct {
 // and populates nextIndex and prevIndex in every case
 func (pi *PeanoIndex) binarySearch(p Peano, minIndex int, maxIndex int) binaryResults {
 	for {
-		attempt := minIndex + int((maxIndex - minIndex) / 2)
+		attempt := minIndex + int((maxIndex-minIndex)/2)
 		pAttempt := pi.Peanos[attempt]
 		if pAttempt == p {
 			// Found it! - look up the previous and next indexes
 			links := pi.Links[pAttempt]
 			res := binaryResults{
-				found: true,
+				found:      true,
 				peanoIndex: attempt,
-				prevIndex: links[0],
-				nextIndex: links[1],
+				prevIndex:  links[0],
+				nextIndex:  links[1],
 			}
 			return res
 		}
@@ -224,12 +224,12 @@ func (pi *PeanoIndex) binarySearch(p Peano, minIndex int, maxIndex int) binaryRe
 		} else {
 			minIndex = attempt
 		}
-		if maxIndex - minIndex <= 1 {
+		if maxIndex-minIndex <= 1 {
 			// The peano could not be found
 			// so return the prev and next links of the attempt
 			links := pi.Links[pAttempt]
 			res := binaryResults{
-				found: false,
+				found:     false,
 				prevIndex: links[0],
 				nextIndex: links[1],
 			}

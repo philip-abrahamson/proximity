@@ -16,12 +16,12 @@ package geodata
 import (
 	"bufio"
 	"cmp"
-    "encoding/csv"
-    "fmt"
+	"encoding/csv"
+	"fmt"
 	"io"
 	"log"
 	"math"
-    "os"
+	"os"
 	"slices"
 	"strconv"
 )
@@ -44,30 +44,33 @@ const PeanoBits = 16
 // Title, Description for free text data
 // URL, an optional hyperlink
 // Bitmap, a 64 bit integer bitmap designed to store up to 64 binary flags
-//   indicating different properties of each record.
-//   For example, a real-estate search application might use several flags to
-//   indicate different price ranges of properties, and other flags to indicate
-//   numbers of bedrooms, garages, etc.  The mapping of the flags and their
-//   interpretation is the responsibility of the developer using this proximity engine.
+//
+//	indicating different properties of each record.
+//	For example, a real-estate search application might use several flags to
+//	indicate different price ranges of properties, and other flags to indicate
+//	numbers of bedrooms, garages, etc.  The mapping of the flags and their
+//	interpretation is the responsibility of the developer using this proximity engine.
+//
 // Lat, Lon are latitude and longitude, traditional geospatial coordinates
 // Peano1 and Peano2, less conventional geospatial indices consisting of the
-//   location along a fractal, space-filling curve.
-//   We use "Peano codes" to estimate proximity, because it is far more
-//   performant looking along a one-dimensional indexed integer to find data
-//   than making a two-dimensional geospatial query.
-//   We use two Peano codes to improve average accuracy, because each Peano code
-//   by itself has quite variable accuracy.
+//
+//	location along a fractal, space-filling curve.
+//	We use "Peano codes" to estimate proximity, because it is far more
+//	performant looking along a one-dimensional indexed integer to find data
+//	than making a two-dimensional geospatial query.
+//	We use two Peano codes to improve average accuracy, because each Peano code
+//	by itself has quite variable accuracy.
 type Record struct {
 	// only capitalised field names are properly converted to JSON
-	ID string `json:"id" binding:"required,string"`
-	Title string `json:"title"`
-	Description string `json:"description"`
-	URL string `json:"url"`
-	Bitmap uint64 `json:"bitmap"`
-	Lat float64 `json:"lat"`
-	Lon float64 `json:"lon"`
-	Peano1 Peano `json:"peano1"`
-	Peano2 Peano `json:"peano2"`
+	ID          string  `json:"id" binding:"required,string"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	URL         string  `json:"url"`
+	Bitmap      uint64  `json:"bitmap"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Peano1      Peano   `json:"peano1"`
+	Peano2      Peano   `json:"peano2"`
 }
 
 // ResultRecord is a record presented to the API output which has a few subtle
@@ -78,43 +81,43 @@ type Record struct {
 // and for presentation of the distance to an end user perhaps no more than one
 // decimal place would be recommended...
 type ResultRecord struct {
-	ID string `json:"id" binding:"required,string"`
-	Title string `json:"title"`
-	Description string `json:"description"`
-	URL string `json:"url"`
-	Bitmap uint64 `json:"bitmap"`
-	Lat float64 `json:"lat" binding:"required,float64"`
-	Lon float64 `json:"lon" binding:"required,float64"`
-	Distance float64 `json:"distance" binding:"required,float64"`
-	Units string `json:"units" binding:"required,string"`
+	ID          string  `json:"id" binding:"required,string"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	URL         string  `json:"url"`
+	Bitmap      uint64  `json:"bitmap"`
+	Lat         float64 `json:"lat" binding:"required,float64"`
+	Lon         float64 `json:"lon" binding:"required,float64"`
+	Distance    float64 `json:"distance" binding:"required,float64"`
+	Units       string  `json:"units" binding:"required,string"`
 }
 
 // Our geospatial data includes the following data structures:
 //
-// * "records"
-//   A slice containing each data record (type Record)
+//   - "records"
+//     A slice containing each data record (type Record)
 //
-// * "peanoIndex1", "peanoIndex2"
-//   Two searchable indexes of "Peano codes" pointing at
-//   the next peano codes in the series.
-//   (Peano codes are fractal space-filling curves discovered by
-//    19th century mathematician Giuseppe Peano. We use them to scale our
-//    proximity queries.  We use two separate peano codes offset from
-//    each other to minimise the spatial distortions inherent when using
-//    a one-dimensional curve to describe a two-dimensional space)
+//   - "peanoIndex1", "peanoIndex2"
+//     Two searchable indexes of "Peano codes" pointing at
+//     the next peano codes in the series.
+//     (Peano codes are fractal space-filling curves discovered by
+//     19th century mathematician Giuseppe Peano. We use them to scale our
+//     proximity queries.  We use two separate peano codes offset from
+//     each other to minimise the spatial distortions inherent when using
+//     a one-dimensional curve to describe a two-dimensional space)
 //
-//  * "peanoMap1", "peanoMap2"
-//    maps of peano code to a slice containing pointers to data records
-//    for each record having that same peano code location.
+//   - "peanoMap1", "peanoMap2"
+//     maps of peano code to a slice containing pointers to data records
+//     for each record having that same peano code location.
 //
 // What we do when we search is:
-// 1. convert the input geospatial latitude & longitude coordinates
-//    into our two Peano codes
-// 2. look-up peanoIndex1 & peanoIndex2 to find the locations of
-//    that peano and a set number of codes before and after it.
-//    We will then look up each record in turn in the peanoMaps
-//    and check each records' bitmap field matches any
-//    boolean logic applied in the query.
+//  1. convert the input geospatial latitude & longitude coordinates
+//     into our two Peano codes
+//  2. look-up peanoIndex1 & peanoIndex2 to find the locations of
+//     that peano and a set number of codes before and after it.
+//     We will then look up each record in turn in the peanoMaps
+//     and check each records' bitmap field matches any
+//     boolean logic applied in the query.
 //
 // Currently this has a weakness if the query is for a very rare
 // property in the bitmap, because the scan of each record could
@@ -123,10 +126,11 @@ type ResultRecord struct {
 // We limit the number of records searched in these cases.
 // But this number - currently in func Find, could be tweaked
 // to increase how far through the records we look:
-//    // currently set to 4 * the number of results
-//    // we're looking for, but could be higher if
-//    // necessary
-//    maxAt = int(max * 4)
+//
+//	// currently set to 4 * the number of results
+//	// we're looking for, but could be higher if
+//	// necessary
+//	maxAt = int(max * 4)
 //
 // What could help here is something like a count or other
 // indication of the distribution of a query property among
@@ -135,11 +139,11 @@ type ResultRecord struct {
 // properties instead of geospatial location, and then
 // sort these by location to find the nearest.
 type GeoData struct {
-	records []Record
+	records     []Record
 	peanoIndex1 *PeanoIndex
 	peanoIndex2 *PeanoIndex
-	peanoMap1 map[Peano][]*Record
-	peanoMap2 map[Peano][]*Record
+	peanoMap1   map[Peano][]*Record
+	peanoMap2   map[Peano][]*Record
 }
 
 // Search results slice
@@ -147,13 +151,13 @@ type Results []ResultRecord
 
 // CSV column positions of each field based on the header line
 type HeaderPosition struct {
-	ID int
-	Title int
+	ID          int
+	Title       int
 	Description int
-	URL int
-	Bitmap int
-	Lat int
-	Lon int
+	URL         int
+	Bitmap      int
+	Lat         int
+	Lon         int
 }
 
 // Origin of secondary offset peano codes,
@@ -172,6 +176,7 @@ const OffsetLon = 29.3456
 
 // bitmap fields are uint64
 const BitmapSize = 64
+
 // lat/lon fields are float64
 const LatLonSize = 64
 
@@ -234,13 +239,13 @@ func (geo *GeoData) PopulateIndexes(mode string) {
 		if exists1 {
 			geo.peanoMap1[peano1] = append(geo.peanoMap1[peano1], &v)
 		} else {
-			geo.peanoMap1[peano1] = []*Record{&v,}
+			geo.peanoMap1[peano1] = []*Record{&v}
 			geo.peanoIndex1.InsertNoReplace(peano1)
 		}
 		if exists2 {
 			geo.peanoMap2[peano2] = append(geo.peanoMap2[peano2], &v)
 		} else {
-			geo.peanoMap2[peano2] = []*Record{&v,}
+			geo.peanoMap2[peano2] = []*Record{&v}
 			geo.peanoIndex2.InsertNoReplace(peano2)
 		}
 	}
@@ -248,16 +253,15 @@ func (geo *GeoData) PopulateIndexes(mode string) {
 	geo.peanoIndex1.Process()
 	geo.peanoIndex2.Process()
 
-	return
 }
 
 // ImportLine imports a line of data into our in-memory search system
-func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err error) {
+func (geo *GeoData) ImportLine(hp *HeaderPosition, line []string, cnt int) (err error) {
 
 	// handle the header line by storing the header positions
 	if cnt == 1 {
 		storeHeaders(hp, line)
-		return
+		return nil
 	}
 
 	// import a data line
@@ -287,12 +291,12 @@ func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err
 	}
 
 	newR := Record{
-		Title: line[hp.Title],
+		Title:       line[hp.Title],
 		Description: line[hp.Description],
-		URL: line[hp.URL],
-		Bitmap: bmap,
-		Lat: lat,
-		Lon: lon,
+		URL:         line[hp.URL],
+		Bitmap:      bmap,
+		Lat:         lat,
+		Lon:         lon,
 	}
 	if line[hp.ID] != "" {
 		newR.ID = line[hp.ID]
@@ -305,7 +309,7 @@ func (geo *GeoData) ImportLine (hp *HeaderPosition, line []string, cnt int) (err
 
 	geo.records = append(geo.records, newR)
 
-	return
+	return nil
 }
 
 // Search the geodata for matching records
@@ -353,12 +357,11 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 			return false
 		}
 		candidates, exists := pMap[peano]
-		if ! exists {
+		if !exists {
 			// e.g. a peano generated by subtracting one from an existing one
 			return true
 		}
-		for i := 0; i < len(candidates); i++ {
-			rec := candidates[i]
+		for _, rec := range candidates {
 			if _, exists := uniqueRecords[rec.ID]; exists {
 				continue
 			}
@@ -401,22 +404,15 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 
 	// traverse each index up and down and merge the results into recs
 	geo.peanoIndex1.AscendGreaterOrEqual(peano1, iteratorUp1)
-	if (peano1 > 0) {
+	if peano1 > 0 {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex1.DescendLessOrEqual(peano1 - 1, iteratorDown1)
+		geo.peanoIndex1.DescendLessOrEqual(peano1-1, iteratorDown1)
 	}
 	geo.peanoIndex2.AscendGreaterOrEqual(peano2, iteratorUp2)
-	if (peano2 > 0) {
+	if peano2 > 0 {
 		// subtract 1 to avoid duplicating that peano
-		geo.peanoIndex2.DescendLessOrEqual(peano2 - 1, iteratorDown2)
+		geo.peanoIndex2.DescendLessOrEqual(peano2-1, iteratorDown2)
 	}
-
-	// if mode != "release" {
-	// 	log.Print("Candidate records:")
-	// 	for _, v := range recs {
-	// 		log.Print(v)
-	// 	}
-	// }
 
 	// Sort by proximity before cutting down to the expected result count.
 	// One option here might be to use a fake proximity e.g. (abs(x) + abs(y))
@@ -432,7 +428,7 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	recProx := make(map[string]float64)
 	for _, rec := range recs {
 		deltaLat := lat - rec.Lat
-		recProx[rec.ID] = proximityForSort(deltaLat/2, deltaLat, lon - rec.Lon)
+		recProx[rec.ID] = proximityForSort(deltaLat/2, deltaLat, lon-rec.Lon)
 	}
 	sorter := func(a, b Record) int {
 		proxA, _ := recProx[a.ID]
@@ -441,31 +437,20 @@ func (geo *GeoData) Find(lat, lon float64, bitmask uint64, max uint64, units str
 	}
 	slices.SortFunc(recs, sorter)
 
-	// if mode != "release" {
-	// 	log.Print("Prox sorted candidate records:")
-	// 	for _, v := range recs {
-	// 		log.Print(v)
-	// 	}
-	// }
-
 	// Cut down the results by slicing by either the smaller of the desired
 	// max records or the count of the current results
-	var maxLen uint64
-	maxLen = uint64(len(recs))
-	if max < maxLen {
-		maxLen = max
-	}
+	maxLen := min(uint64(len(recs)), max)
 	for _, rec := range recs[:maxLen] {
 		rrec := ResultRecord{
-			ID: rec.ID,
-			Title: rec.Title,
+			ID:          rec.ID,
+			Title:       rec.Title,
 			Description: rec.Description,
-			URL: rec.URL,
-			Bitmap: rec.Bitmap,
-			Lat: rec.Lat,
-			Lon: rec.Lon,
-			Distance: proximity(recProx[rec.ID], units),
-			Units: units,
+			URL:         rec.URL,
+			Bitmap:      rec.Bitmap,
+			Lat:         rec.Lat,
+			Lon:         rec.Lon,
+			Distance:    proximity(recProx[rec.ID], units),
+			Units:       units,
 		}
 
 		res = append(res, rrec)
@@ -496,7 +481,6 @@ func storeHeaders(hp *HeaderPosition, line []string) {
 			panic(fmt.Sprintf("header field '%s' not recognised!", v))
 		}
 	}
-	return
 }
 
 // CalcPeano calculates a peano code from a floating point latitude/longitude
@@ -521,7 +505,7 @@ func CalcPeano(lat, lon float64) Peano {
 	maskIn = 1
 	maskOut = 2
 
-	for i := 0; i < 16; i++ {
+	for range 16 {
 
 		if (lat16 & maskIn) != 0 {
 			peano += maskOut
@@ -533,7 +517,7 @@ func CalcPeano(lat, lon float64) Peano {
 
 	maskIn = 1
 	maskOut = 1
-	for i := 0; i < 16; i++ {
+	for range 16 {
 
 		if (lon16 & maskIn) != 0 {
 			peano += maskOut
@@ -559,8 +543,8 @@ func digitiseDegrees(lat, lon float64) (lat16, lon16 uint16) {
 	// Convert the lat/lon into 16 bit ints
 	// centered on the equator (ie. 32768=Equator)
 	// and the 0 = -180deg, 65536 = +180deg
-	lat16 = uint16(((lat + 90.0)/180.0 * 32767) + 16384)
-	lon16 = uint16((lon + 180.0)/360.0 * 65535)
+	lat16 = uint16(((lat + 90.0) / 180.0 * 32767) + 16384)
+	lon16 = uint16((lon + 180.0) / 360.0 * 65535)
 	return lat16, lon16
 }
 
@@ -597,6 +581,7 @@ func Offset(lat, lon float64) (latOff, lonOff float64) {
 // We use only positive latitudes to save space, should we
 // increase the size of this table.
 var cosineTable map[int]float64
+
 // cosineEstimate looks up our cosineTable for a fast
 // estimate of the cos trigonometric function.
 func cosineEstimate(latInt int) float64 {
@@ -622,7 +607,6 @@ func generateCosineTable() {
 		rad := float64(deg) * math.Pi / 180.0
 		cosineTable[deg] = math.Cos(rad)
 	}
-	return
 }
 
 // Estimate of the square of the proximity for sorting purposes.
